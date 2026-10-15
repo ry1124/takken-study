@@ -13,10 +13,10 @@ PLAN_JSON = HERE / "plan.json"   # make_plan.py が作る
 
 # 科目の一覧。md がまだ無い科目は「準備中」として表示する
 SUBJECTS = [
-    {"id": "gyoho", "name": "宅建業法", "file": "01_gyoho.md", "when": "2026年10月〜11月"},
-    {"id": "horei", "name": "法令上の制限", "file": "02_horei.md", "when": "2026年12月"},
-    {"id": "kenri", "name": "権利関係", "file": "03_kenri.md", "when": "2027年1月〜3月"},
-    {"id": "zei", "name": "税・その他", "file": "04_zei.md", "when": "2027年4月"},
+    {"id": "gyoho", "name": "宅建業法", "file": "01_gyoho.md", "when": "10/16〜11/21"},
+    {"id": "horei", "name": "法令上の制限", "file": "02_horei.md", "when": "11/23〜12/19"},
+    {"id": "kenri", "name": "権利関係", "file": "03_kenri.md", "when": "12/21〜2/6"},
+    {"id": "zei", "name": "税・その他", "file": "04_zei.md", "when": "2/8〜2/27"},
 ]
 
 # 計画表の「今日のテーマ」に出てくる単元名(計画作成時の並び)。章番号と同じ順番

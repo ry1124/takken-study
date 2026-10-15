@@ -2,7 +2,7 @@
 """宅建 2027年合格プラン(厳しめ版)の毎日の計画を作る。
 出力: data_src/plan.json(アプリ用) と 宅建\\宅建_毎日の学習計画.xlsx(人が見る用)。
 方針: 毎日30分は宅建業法の一問一答 / 章を読んだ日に同じ範囲の過去問 / 日曜は週テスト(完全休養は月1回) /
-      月末に関門(届かなければ次に進まず翌週を復習) / 5月から毎週土曜に年度別過去問の通し演習。"""
+      月末に関門(届かなければ次に進まず翌週を復習) / 2月末までに全科目を1周し、3月から毎週土曜に年度別過去問の通し演習。"""
 import datetime as dt
 import json
 import os
@@ -75,7 +75,8 @@ def allocate(topics, n):
     tot = sum(w for _, w in topics)
     raw = [w * n / tot for _, w in topics]
     cnt = [max(1, int(r)) for r in raw]
-    order = sorted(range(len(topics)), key=lambda i: raw[i] - int(raw[i]), reverse=True)
+    # 足りない分は、本来の配分(raw)に対して不足が大きい単元から1日ずつ足す
+    order = sorted(range(len(topics)), key=lambda i: raw[i] - cnt[i], reverse=True)
     i = 0
     while sum(cnt) < n:
         cnt[order[i % len(order)]] += 1
@@ -121,21 +122,21 @@ def g(gid, label, typ, target, frm=None):
     return {"id": gid, "label": label, "type": typ, "target": target, "from": frm}
 
 
-# ===== 10月〜4月: 各科目の1周目 =====
-first_round(D(2026, 10, 16), D(2026, 11, 30), "①宅建業法", "宅建業法", GYOHO, "宅建業法 正答率80%",
+# ===== 10月〜2月: 各科目の1周目(2月末までに全科目を1周) =====
+first_round(D(2026, 10, 16), D(2026, 11, 22), "①宅建業法", "宅建業法", GYOHO, "宅建業法 正答率80%",
             f"{IPPON}\n②宅建業法の分野別過去問からランダムに40問、時間を計って解く（2時間）\n③正答率を出し、アプリの「今日」に入力（30分）",
             [g("g1-gyoho", "宅建業法の分野別過去問の正答率", "pct", 80)])
-first_round(D(2026, 12, 1), D(2026, 12, 31), "②法令上の制限", "法令上の制限", HOREI, "法令上の制限70%・宅建業法80%",
+first_round(D(2026, 11, 23), D(2026, 12, 20), "②法令上の制限", "法令上の制限", HOREI, "法令上の制限70%・宅建業法80%",
             f"{IPPON}\n②法令上の制限と宅建業法の分野別過去問を、20問ずつランダムに解く（2時間）\n③それぞれの正答率を出し、アプリの「今日」に入力（30分）",
             [g("g2-horei", "法令上の制限の正答率", "pct", 70), g("g2-gyoho", "宅建業法の正答率（維持）", "pct", 80)])
-first_round(D(2027, 1, 2), D(2027, 3, 31), "③権利関係", "権利関係", KENRI, "権利関係60%・宅建業法85%",
+first_round(D(2026, 12, 21), D(2027, 2, 7), "③権利関係", "権利関係", KENRI, "権利関係60%・宅建業法85%",
             f"{IPPON}\n②権利関係と宅建業法の分野別過去問を、20問ずつランダムに解く（2時間）\n③それぞれの正答率を出し、アプリの「今日」に入力（30分）",
             [g("g3-kenri", "権利関係の正答率", "pct", 60), g("g3-gyoho", "宅建業法の正答率（維持）", "pct", 85)])
-first_round(D(2027, 4, 1), D(2027, 4, 30), "④税・その他＋業法2周目", "税・その他", ZEI, "全科目1周完了・実力測定",
+first_round(D(2027, 2, 8), D(2027, 2, 28), "④税・その他＋業法2周目", "税・その他", ZEI, "全科目1周完了・実力測定",
             f"{IPPON}\n②年度別過去問（2026年度）50問を本番どおり2時間で解く\n③採点し、点数をアプリの「今日」に入力（30分）",
             [g("g4-first", "初めての年度別過去問（実力測定）", "score", None)], extra=[t for t, _ in GYOHO])
 
-# ===== 5〜6月: 全科目2周目(平日) + 土曜に年度別の通し演習 =====
+# ===== 3〜6月: 全科目の2周目・3周目(平日) + 毎週土曜に年度別の通し演習 =====
 def chunk(topics, size):
     names = [t for t, _ in topics]
     return [names[i:i + size] for i in range(0, len(names), size)]
@@ -143,29 +144,39 @@ def chunk(topics, size):
 
 groups = ([("宅建業法", x) for x in chunk(GYOHO, 3)] + [("法令上の制限", x) for x in chunk(HOREI, 2)]
           + [("権利関係", x) for x in chunk(KENRI, 2)] + [("税・その他", x) for x in chunk(ZEI, 3)])
-SAT_YEARS = ["2012年度", "2013年度", "2014年度", "2015年度", "2016年度", "2020年度（12月実施分）", "2021年度（12月実施分）"]
-days = weekdays(D(2027, 5, 1), D(2027, 6, 30))
-gday = days[-1]
-gi = si = 0
-for d in days[:-1]:
-    if d.weekday() == 5:
-        if si < len(SAT_YEARS):
-            y = SAT_YEARS[si]
-            put(d, "⑤全科目2周目", "過去問", f"通し演習：{y}",
-                f"{IPPON}\n②{y}の過去問50問を本番どおり2時間で解く\n③採点して点数をアプリに入力し、×の解説を読む（30分）", score=True)
-        else:
-            put(d, "⑤全科目2周目", "過去問", "通し演習：苦手科目",
-                f"{IPPON}\n②正答率がいちばん低い科目の分野別過去問を、時間を計って解く（2時間）\n{FIX}")
-        si += 1
-        continue
-    subj, grp = groups[gi % len(groups)]
-    rnd = "2周目" if gi < len(groups) else "3周目（×の問題だけ）"
-    put(d, "⑤全科目2周目", subj, f"{rnd}：" + "／".join(grp),
-        f"{IPPON}\n②分野別過去問の「{'」「'.join(grp)}」を解く（2時間）\n③×の問題をテキストで確認し、弱点ノートに1行メモ（30分）")
-    gi += 1
-gate_day(gday, "⑤全科目2周目", "過去問", "年度別過去問で33点以上",
-         f"{IPPON}\n②2025年度の過去問50問を本番どおり2時間で解く\n③採点し、点数をアプリの「今日」に入力（30分）",
-         [g("g5-33", "年度別過去問の点数", "score", 33)])
+SAT_YEARS = [f"{y}年度" for y in range(2008, 2017)] + ["2020年度（12月実施分）", "2021年度（12月実施分）"]
+ROUNDS = ["2周目", "3周目（×の問題だけ）", "4周目（×の問題だけ）"]
+progress = {"gi": 0, "si": 0}   # 3〜4月と5〜6月で、単元と土曜の年度を続きから進める
+
+
+def rounds(start, end, phase, gate_theme, gate_year, gate_item):
+    days = weekdays(start, end)
+    for d in days[:-1]:
+        if d.weekday() == 5:
+            si = progress["si"]
+            if si < len(SAT_YEARS):
+                y = SAT_YEARS[si]
+                put(d, phase, "過去問", f"通し演習：{y}",
+                    f"{IPPON}\n②{y}の過去問50問を本番どおり2時間で解く（法改正に対応した過去問集で）\n③採点して点数をアプリに入力し、×の解説を読む（30分）", score=True)
+            else:
+                put(d, phase, "過去問", "通し演習：苦手科目",
+                    f"{IPPON}\n②正答率がいちばん低い科目の分野別過去問を、時間を計って解く（2時間）\n{FIX}")
+            progress["si"] += 1
+            continue
+        gi = progress["gi"]
+        subj, grp = groups[gi % len(groups)]
+        rnd = ROUNDS[min(gi // len(groups), len(ROUNDS) - 1)]
+        put(d, phase, subj, f"{rnd}：" + "／".join(grp),
+            f"{IPPON}\n②分野別過去問の「{'」「'.join(grp)}」を解く（2時間）\n③×の問題をテキストで確認し、弱点ノートに1行メモ（30分）")
+        progress["gi"] += 1
+    gate_day(days[-1], phase, "過去問", gate_theme,
+             f"{IPPON}\n②{gate_year}の過去問50問を本番どおり2時間で解く\n③採点し、点数をアプリの「今日」に入力（30分）", [gate_item])
+
+
+rounds(D(2027, 3, 1), D(2027, 4, 30), "⑤全科目2周目", "年度別過去問で30点以上", "2025年度",
+       g("g5-30", "年度別過去問の点数", "score", 30))
+rounds(D(2027, 5, 1), D(2027, 6, 30), "⑥全科目3周目", "年度別過去問で35点以上", "2024年度",
+       g("g6-35", "年度別過去問の点数", "score", 35))
 
 # ===== 7〜8月: 年度別過去問を2周 =====
 YEARS = [f"{y}年度" for y in range(2017, 2027)]
@@ -192,12 +203,12 @@ def nendo(start, end, phase, label, gate):
     gate_day(gday, phase, "過去問", gate[0], gate[1], gate[2])
 
 
-nendo(D(2027, 7, 1), D(2027, 7, 31), "⑥年度別過去問1周目", "1周目",
+nendo(D(2027, 7, 1), D(2027, 7, 31), "⑦年度別過去問1周目", "1周目",
       ("まだ届いていなくてよい", "", None))
 plan.pop(max(d for d in plan if d.month == 7 and d.year == 2027))   # 7月は関門なし。最後の日は弱点つぶしにする
-put(weekdays(D(2027, 7, 1), D(2027, 7, 31))[-1], "⑥年度別過去問1周目", "弱点", "弱点つぶし",
+put(weekdays(D(2027, 7, 1), D(2027, 7, 31))[-1], "⑦年度別過去問1周目", "弱点", "弱点つぶし",
     f"{IPPON}\n②今月の過去問で点が低かった科目の分野別過去問を解き直す（2時間）\n③弱点ノートを読み返す（30分）")
-nendo(D(2027, 8, 1), D(2027, 8, 31), "⑦年度別過去問2周目", "2周目",
+nendo(D(2027, 8, 1), D(2027, 8, 31), "⑧年度別過去問2周目", "2周目",
       ("年度別過去問で37点以上を3回連続",
        f"{IPPON}\n②今月の点数を見直し、直近3回が37点以上か確かめる（30分）\n③届いていない科目の分野別過去問を解き直す（2時間）",
        [g("g7-37", "直近3回の年度別過去問（すべて37点以上）", "streak3", 37, "2027-08-01")]))
@@ -218,8 +229,8 @@ while len(items9) < len(sep) - 1:
 order = [0, 1, 8, 2, 3, 11, 9, 4, 5, 12, 10, 6, 7] + list(range(13, len(items9)))
 for d, idx in zip(sep[:-1], order):
     s, th, todo, sc = items9[idx]
-    put(d, "⑧模試・法改正・統計", s, th, todo, score=sc)
-gate_day(sep[-1], "⑧模試・法改正・統計", "模試", "模試で40点以上を3回連続",
+    put(d, "⑨模試・法改正・統計", s, th, todo, score=sc)
+gate_day(sep[-1], "⑨模試・法改正・統計", "模試", "模試で40点以上を3回連続",
          f"{IPPON}\n②9月の模試の点数を見直し、直近3回が40点以上か確かめる（30分）\n③届いていない科目の×問題を解き直す（2時間）",
          [g("g8-40", "直近3回の模試（すべて40点以上）", "streak3", 40, "2027-09-01")])
 
@@ -239,7 +250,7 @@ final = [("宅建業法", "総復習：宅建業法①", "業法の弱点ノー�
          ("全科目", "軽い総復習", "弱点ノートを読むだけ（2時間）。新しい問題には手を出さない"),
          ("前日", "試験前日", "弱点ノートと統計を1時間だけ見る。受験票・筆記用具・腕時計を準備して早く寝る")]
 for d, (s, th, todo) in zip(weekdays(D(2027, 10, 1), D(2027, 10, 16)), final):
-    put(d, "⑨直前期", s, th, todo)
+    put(d, "⑩直前期", s, th, todo)
 put(EXAM, "本番", "試験", "宅建試験 本番", "13:00〜15:00。宅建業法から解き始める", "ここまでやった自分を信じて")
 
 # ===== 日曜: 週テスト(月の最初の日曜だけ完全休養)・年末年始 =====

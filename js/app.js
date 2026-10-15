@@ -523,7 +523,7 @@ function renderRecord() {
   html += scores.length ? `<ul class="list">` + scores.map((p) => `<li class="list-row static">
       <span class="row-main"><span class="row-title">${esc(p.theme)}</span><span class="row-sub">${fmtDay(p.d)}</span></span>
       <span class="score-chip ${Number(state.scores[p.d]) >= 37 ? 'good' : ''}">${esc(state.scores[p.d])}点</span></li>`).join('') + `</ul>`
-    : `<div class="card soft"><p class="muted">5月から、過去問の通し演習や模試を解いた日に「今日」の画面で点数を入れると、ここに並びます。</p></div>`;
+    : `<div class="card soft"><p class="muted">3月から、過去問の通し演習や模試を解いた日に「今日」の画面で点数を入れると、ここに並びます。</p></div>`;
 
   html += `<h2 class="section-title">バックアップ</h2>
     <div class="card soft">
