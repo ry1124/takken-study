@@ -49,6 +49,7 @@ function switchTab(tab) {
   RENDER[tab]();
   showView(tab);
   if (tab === 'plan') scrollPlanToToday(false);
+  if (pendingReload) location.reload(); // 問題を解いている間に見つけた更新を、解き終わってから反映する
 }
 
 function chapterTitle(id) {
@@ -393,6 +394,7 @@ function renderRecord() {
         <button class="btn ghost" id="btn-import">読み込む</button>
       </div>
     </div>
+    <button class="btn ghost" id="btn-check-update">アップデートを確認</button>
     <p class="foot">バージョン ${APP_VERSION}・試験日 ${fmtDay(D.exam, true)}（予定）</p>`;
   $('record-body').innerHTML = html;
 }
@@ -435,6 +437,7 @@ document.addEventListener('click', (e) => {
     case 'btn-plan-today': planOnlyOpen = false; renderPlan(); return scrollPlanToToday(true);
     case 'btn-export': return doExport();
     case 'btn-import': return $('backup-file').click();
+    case 'btn-check-update': return checkForUpdate(true);
   }
 });
 
@@ -488,7 +491,59 @@ document.addEventListener('visibilitychange', () => {
     lastDay = todayStr();
     RENDER[currentTab]();
   }
+  if (document.visibilityState === 'visible') checkForUpdate(false);
 });
+
+// ===== 自動アップデート =====
+// サーバー上の最新の js/version.js を(キャッシュを通さず)取りに行き、今動いているバージョンと比べる
+async function fetchLatestVersion() {
+  const res = await fetch(`js/version.js?t=${Date.now()}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('取得できませんでした');
+  const m = (await res.text()).match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
+  if (!m) throw new Error('バージョンを読み取れませんでした');
+  return m[1];
+}
+
+let pendingReload = false;
+let updateInFlight = false;
+// 新しいバージョンがあれば、そのファイル一式を新しいキャッシュに入れてから画面を更新する。
+// service-worker.js 自体は中身が変わらないリリースもあるので、ブラウザの更新チェックだけに頼らない
+async function checkForUpdate(manual) {
+  if (updateInFlight || !('caches' in window)) return;
+  updateInFlight = true;
+  try {
+    const latest = await fetchLatestVersion();
+    if (latest === APP_VERSION) {
+      if (manual) showToast(`最新のバージョン（${APP_VERSION}）です`);
+      return;
+    }
+    // 同じバージョンへの自動更新は1回だけ(HTTPキャッシュが古いまま再読込を繰り返さないため)
+    let tried = null;
+    try { tried = localStorage.getItem('takken-update-tried'); } catch (e) { /* なくても動く */ }
+    if (!manual && tried === latest) return;
+    try { localStorage.setItem('takken-update-tried', latest); } catch (e) { /* なくても動く */ }
+
+    const name = 'takken-cache-' + latest;
+    const cache = await caches.open(name);
+    await cache.addAll(CORE_ASSETS.map((u) => new Request(u, { cache: 'reload' })));
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((k) => k !== name).map((k) => caches.delete(k)));
+    const reg = await navigator.serviceWorker?.getRegistration();
+    if (reg) reg.update().catch(() => {});
+
+    if ($('view-quiz').classList.contains('active')) {
+      pendingReload = true;
+      showToast(`新しいバージョン（${latest}）があります。問題を終えたら更新します`);
+    } else {
+      showToast(`新しいバージョン（${latest}）に更新します`);
+      setTimeout(() => location.reload(), 900);
+    }
+  } catch (e) {
+    if (manual) showToast('確認できませんでした。通信状態を確かめてください');
+  } finally {
+    updateInFlight = false;
+  }
+}
 
 // ===== 起動 =====
 $('app-version').textContent = 'v' + APP_VERSION;
@@ -496,3 +551,4 @@ switchTab('today'); // 開いたら毎回「今日」から
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('service-worker.js').catch(() => {});
 }
+checkForUpdate(false); // 開いたときに、裏で新しいバージョンがないか確認する

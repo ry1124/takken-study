@@ -1,22 +1,13 @@
 // オフラインでも起動できるように、アプリ本体のファイルをキャッシュする
-importScripts('./js/version.js');
+importScripts('./js/version.js', './js/assets.js');
 const CACHE_NAME = 'takken-cache-' + APP_VERSION;
-const CORE_ASSETS = [
-  './',
-  './index.html',
-  './manifest.json',
-  './css/style.css',
-  './js/version.js',
-  './js/data.js',
-  './js/store.js',
-  './js/app.js',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
-];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS)).catch(() => {})
+    // ブラウザのHTTPキャッシュを通さず、サーバーの最新を取る
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(CORE_ASSETS.map((u) => new Request(u, { cache: 'reload' }))))
+      .catch(() => {})
   );
   self.skipWaiting();
 });
