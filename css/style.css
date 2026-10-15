@@ -252,3 +252,19 @@ html, body {
   .page.flush { max-width: 720px; }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+
+/* ===== 厳しめ版: 関門・一問一答・勘で当たった ===== */
+.card.alert { background: var(--bad-soft); border: 1px solid var(--bad); }
+.card.alert .card-label { color: var(--bad); }
+.alert-text { margin: 0; font-size: 15px; font-weight: 700; line-height: 1.6; }
+.gate { display: flex; flex-direction: column; gap: 8px; }
+.gate-item { display: flex; flex-direction: column; gap: 6px; background: var(--surface); border-radius: 12px; padding: 12px; }
+.gate-head { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.gate-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 15px; }
+.gate-sub { font-size: 13px; color: var(--text-dim); }
+.gate-mark { color: var(--bad); }
+.badge { font-size: 12px; font-weight: 700; border-radius: 8px; padding: 2px 8px; }
+.badge.ok { background: var(--good-soft); color: var(--good); }
+.badge.ng { background: var(--bad-soft); color: var(--bad); }
+.guess-btn { margin-top: 10px; width: 100%; font-family: inherit; font-size: 13px; color: var(--text-dim); background: rgba(255, 255, 255, 0.7); border: 1px dashed var(--border); border-radius: 10px; padding: 8px; cursor: pointer; }
+.btn:disabled { opacity: 0.45; cursor: default; }

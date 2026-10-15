@@ -69,8 +69,73 @@ function chapterStats(id) {
   return { total: qs.length, tried: tried.length, okNow };
 }
 
+// 「間違えた問題」: 一度でも間違えて、まだ3回続けて正解していない問題
 function wrongIds() {
-  return Object.keys(QUESTIONS).filter((id) => state.quiz[id] && state.quiz[id].last === false);
+  return Object.keys(QUESTIONS).filter((id) => isWeak(state.quiz[id]));
+}
+
+// この7日間に間違えた問題(日曜の週テスト用)
+function weekWrongIds() {
+  const since = Date.now() - 7 * 86400000;
+  return wrongIds().filter((id) => new Date(state.quiz[id].at).getTime() >= since);
+}
+
+// ===== 宅建業法の一問一答(毎日) =====
+const IPPON_SIZE = 10;
+// 章を最初に読む日。その日を過ぎた章だけを一問一答に出す
+const CH_FIRST_DAY = {};
+PLAN.forEach((p) => p.ch.forEach((id) => { if (!CH_FIRST_DAY[id]) CH_FIRST_DAY[id] = p.d; }));
+
+function ipponPool() {
+  const t = todayStr();
+  const reached = Object.keys(CHAPTERS).filter((id) => id.startsWith('gyoho-') && CH_FIRST_DAY[id] && CH_FIRST_DAY[id] <= t);
+  const chs = reached.length ? reached : ['gyoho-01'];
+  return chs.flatMap((id) => CHAPTERS[id].quiz.map((q) => q.id));
+}
+
+// 間違えた問題 → まだ解いていない問題 → 最後に解いたのが古い問題、の順に10問
+function ipponSet() {
+  const pool = ipponPool();
+  const rank = (id) => {
+    const r = state.quiz[id];
+    if (isWeak(r)) return [0, r.at];
+    if (!r) return [1, ''];
+    return [2, r.at];
+  };
+  return shuffle(pool.slice())
+    .sort((a, b) => { const x = rank(a); const y = rank(b); return x[0] - y[0] || String(x[1]).localeCompare(String(y[1])); })
+    .slice(0, IPPON_SIZE);
+}
+
+// ===== 関門 =====
+// 直近3回の点数(関門の日までの、from以降に入力した点数)
+function recentScores(item, gateDay) {
+  return PLAN.filter((p) => p.score && state.scores[p.d] && p.d >= (item.from || '') && p.d <= gateDay)
+    .map((p) => Number(state.scores[p.d])).slice(-3);
+}
+
+// 関門の1項目の結果: { value, pass(null=未入力), text }
+function gateResult(item, gateDay) {
+  if (item.type === 'streak3') {
+    const s = recentScores(item, gateDay);
+    if (s.length < 3) return { value: s, pass: null, text: `点数が${s.length}回分しかありません（3回分必要）` };
+    return { value: s, pass: s.every((x) => x >= item.target), text: `直近3回：${s.join('・')}点` };
+  }
+  const v = state.gates[item.id];
+  if (v === undefined || v === '') return { value: null, pass: null, text: '未入力' };
+  const unit = item.type === 'pct' ? '%' : '点';
+  return { value: v, pass: item.target == null ? true : Number(v) >= item.target, text: `${v}${unit}` };
+}
+
+function gateDays() {
+  return PLAN.filter((p) => p.gate);
+}
+
+// 関門の日から7日以内で、届かなかった(または未入力の)関門
+function failedGateNow() {
+  const t = todayStr();
+  return gateDays().find((p) => p.d <= t && daysBetween(p.d, t) <= 7
+    && p.gate.some((it) => it.target != null && gateResult(it, p.d).pass !== true));
 }
 
 // ===== 今日 =====
@@ -89,14 +154,37 @@ function renderToday() {
     day = PLAN[0];
     label = `${fmtDay(first)}から始まります`;
   }
+  // 関門に届かなかった週は、次に進まず復習を優先する
+  const failed = failedGateNow();
+  if (failed && failed.d !== t) {
+    const miss = failed.gate.filter((it) => it.target != null && gateResult(it, failed.d).pass !== true);
+    html += `<div class="card alert">
+      <div class="card-label">関門に届いていません（${fmtDay(failed.d)}）</div>
+      <p class="alert-text">${miss.map((it) => `${esc(it.label)}：${esc(gateResult(it, failed.d).text)}（目標 ${it.target}${it.type === 'pct' ? '%' : '点'}）`).join('<br>')}</p>
+      <p class="muted">ルールどおり、今週は先に進まず、この科目の×の問題と弱点ノートの復習を優先してください。もう一度測って届いたら、関門の日の数値を書き換えてください。</p>
+      <button class="btn ghost" data-plan-detail="${failed.d}">関門の日を開く</button>
+    </div>`;
+  }
+
   if (day) html += dayCard(day, label);
+
+  // 宅建業法の一問一答(毎日)
+  if (t >= first) {
+    const n = state.ippon[t] || 0;
+    const fin = n >= IPPON_SIZE;
+    html += `<div class="card ${fin ? 'soft' : 'main'} ippon">
+      <div class="card-label">毎日の一問一答<span class="pill">宅建業法</span></div>
+      <p class="muted">間違えた問題を優先して${IPPON_SIZE}問出します。3回続けて正解するまで、何度でも出ます。</p>
+      <button class="btn ${fin ? 'done' : 'primary'}" data-quiz-mode="ippon">${fin ? `✓ 今日の${IPPON_SIZE}問は解きました（もう一度解く）` : `一問一答を始める（今日 ${n}/${IPPON_SIZE}問）`}</button>
+    </div>`;
+  }
 
   // 遅れている日(予定日を過ぎて未完了)
   const behind = PLAN.filter((p) => p.d < t && !p.rest && !state.done[p.d]);
   if (behind.length) {
     html += `<div class="card warn">
       <div class="card-label">まだ終わっていない日が ${behind.length} 日あります</div>
-      <p class="muted">休みの日（日曜）に取り戻しましょう。いちばん古いのは ${fmtDay(behind[0].d)} の「${esc(behind[0].theme)}」です。</p>
+      <p class="muted">日曜の週テストまでに取り戻してください。いちばん古いのは ${fmtDay(behind[0].d)} の「${esc(behind[0].theme)}」です。</p>
       <button class="btn ghost" data-go-plan="1">計画で確認する</button>
     </div>`;
   }
@@ -122,18 +210,44 @@ function dayCard(day, label) {
       const s = chapterStats(id);
       return `<div class="link-row">
         <button class="btn ghost" data-open-ch="${id}">📖 ${esc(chapterTitle(id))}</button>
-        ${s.total ? `<button class="btn ghost small" data-quiz-ch="${id}">確認問題 ${s.okNow}/${s.total}</button>` : ''}
+        ${s.total ? `<button class="btn ghost small" data-quiz-ch="${id}">問題 ${s.okNow}/${s.total}</button>` : ''}
       </div>`;
     }).join('') + `</div>`;
+  }
+  if (day.subj === '週テスト') {
+    const w = weekWrongIds().length;
+    h += `<button class="btn ghost" data-quiz-mode="week" ${w ? '' : 'disabled'}>今週間違えた確認問題を解き直す（${w}問）</button>`;
   }
   if (day.score) {
     const v = state.scores[day.d] || '';
     h += `<label class="score-row" for="score-${day.d}">点数（50点満点）
       <input id="score-${day.d}" class="score-input" type="number" min="0" max="50" inputmode="numeric" value="${esc(v)}" data-score-day="${day.d}"></label>`;
   }
+  if (day.gate) h += gateBox(day);
   if (!day.rest) {
     h += `<button class="btn ${done ? 'done' : 'primary'}" data-toggle-day="${day.d}">${done ? '✓ 完了しました（取り消す）' : 'この日の分を完了にする'}</button>`;
   }
+  return h + `</div>`;
+}
+
+// 関門の日の入力欄と判定
+function gateBox(day) {
+  let h = `<div class="gate">`;
+  day.gate.forEach((it) => {
+    const r = gateResult(it, day.d);
+    const badge = r.pass === null ? '' : r.pass ? '<span class="badge ok">合格ライン</span>' : '<span class="badge ng">届いていない</span>';
+    const goal = it.target == null ? '記録する' : `目標 ${it.target}${it.type === 'pct' ? '%' : '点'}以上`;
+    if (it.type === 'streak3') {
+      h += `<div class="gate-item"><div class="gate-head">${esc(it.label)}${badge}</div>
+        <div class="gate-sub">${esc(goal)}・${esc(r.text)}</div></div>`;
+    } else {
+      const max = it.type === 'pct' ? 100 : 50;
+      h += `<label class="gate-item" for="gate-${it.id}"><div class="gate-head">${esc(it.label)}${badge}</div>
+        <div class="gate-row"><span class="gate-sub">${esc(goal)}</span>
+        <span><input id="gate-${it.id}" class="score-input" type="number" min="0" max="${max}" inputmode="numeric"
+          value="${esc(state.gates[it.id] ?? '')}" data-gate-id="${it.id}" data-gate-max="${max}"> ${it.type === 'pct' ? '%' : '点'}</span></div></label>`;
+    }
+  });
   return h + `</div>`;
 }
 
@@ -191,8 +305,10 @@ function renderQuizMenu() {
   const t = todayStr();
   const today = PLAN.find((p) => p.d === t);
   let html = `<div class="quick">
+    <button class="quick-btn" data-quiz-mode="ippon">
+      <b>毎日の一問一答</b><span>宅建業法 ${IPPON_SIZE}問</span></button>
     <button class="quick-btn" data-quiz-mode="wrong" ${wrong.length ? '' : 'disabled'}>
-      <b>間違えた問題だけ</b><span>${wrong.length}問</span></button>
+      <b>間違えた問題</b><span>${wrong.length}問（3回続けて正解で外れる）</span></button>
     <button class="quick-btn" data-quiz-mode="random" ${allIds.length ? '' : 'disabled'}>
       <b>ランダムに10問</b><span>全${allIds.length}問から</span></button>
     <button class="quick-btn" data-quiz-mode="new" ${answered < allIds.length ? '' : 'disabled'}>
@@ -222,9 +338,9 @@ function shuffle(a) {
   return a;
 }
 
-function startQuiz(ids, title) {
+function startQuiz(ids, title, mode) {
   if (!ids.length) { showToast('出題できる問題がありません'); return; }
-  quiz = { ids, i: 0, results: [], title, answered: false };
+  quiz = { ids, i: 0, results: [], title, answered: false, mode: mode || '' };
   backTo.quiz = currentTab;
   showView('quiz');
   renderQuestion();
@@ -232,7 +348,9 @@ function startQuiz(ids, title) {
 
 function startQuizMode(mode) {
   const all = Object.keys(QUESTIONS);
-  if (mode === 'wrong') startQuiz(shuffle(wrongIds()), '間違えた問題');
+  if (mode === 'ippon') startQuiz(ipponSet(), '一問一答', 'ippon');
+  else if (mode === 'week') startQuiz(shuffle(weekWrongIds()), '今週間違えた問題');
+  else if (mode === 'wrong') startQuiz(shuffle(wrongIds()), '間違えた問題');
   else if (mode === 'random') startQuiz(shuffle(all.slice()).slice(0, 10), 'ランダム10問');
   else if (mode === 'new') startQuiz(all.filter((id) => !state.quiz[id]).slice(0, 10), 'まだ解いていない問題');
   else if (mode === 'today') {
@@ -263,6 +381,11 @@ function answerQuestion(choice) {
   const ok = choice === q.a;
   recordAnswer(id, ok);
   quiz.results.push(ok);
+  if (quiz.mode === 'ippon') {
+    const t = todayStr();
+    state.ippon[t] = (state.ippon[t] || 0) + 1;
+    saveState();
+  }
   document.querySelectorAll('.ox-btn').forEach((b) => {
     const isAns = (b.dataset.answer === '1') === q.a;
     b.classList.add(isAns ? 'is-answer' : 'is-other');
@@ -272,6 +395,7 @@ function answerQuestion(choice) {
   $('q-result').innerHTML = `<div class="result ${ok ? 'ok' : 'ng'}">
       <div class="result-head">${ok ? '正解' : '不正解'}　答えは ${q.a ? '○' : '×'}</div>
       ${q.exp ? `<p>${esc(q.exp)}</p>` : ''}
+      ${ok ? `<button class="guess-btn" id="btn-guess">理由を説明できない（勘で当たった）→ ×にする</button>` : ''}
     </div>
     <div class="q-actions">
       <button class="btn ghost small" data-open-ch="${q.ch}">テキストで確認</button>
@@ -325,7 +449,7 @@ function renderPlan() {
       <div class="plan-date"><b>${Number(p.d.slice(8))}</b><span>${WD[parseDay(p.d).getDay()]}</span></div>
       <div class="plan-main" data-plan-detail="${p.d}">
         <div class="plan-theme">${esc(p.theme)}</div>
-        <div class="plan-sub">${esc(p.subj)}${state.scores[p.d] ? `・${esc(state.scores[p.d])}点` : ''}${p.memo ? '・⚠️' : ''}</div>
+        <div class="plan-sub">${p.gate ? '<b class="gate-mark">関門</b>・' : ''}${esc(p.subj)}${state.scores[p.d] ? `・${esc(state.scores[p.d])}点` : ''}${p.memo ? '・⚠️' : ''}</div>
       </div>
       ${p.rest ? '<span class="plan-check rest"></span>' : `<button class="plan-check ${done ? 'on' : ''}" data-toggle-day="${p.d}" aria-label="${done ? '完了を取り消す' : '完了にする'}">${done ? '✓' : ''}</button>`}
     </div>`;
@@ -344,8 +468,8 @@ function scrollPlanToToday(smooth) {
 
 function showPlanDetail(d) {
   const p = PLAN.find((x) => x.d === d);
-  backTo.chapter = 'plan';
-  $('chapter-crumb').textContent = '計画';
+  if (!$('view-chapter').classList.contains('active')) backTo.chapter = currentTab;
+  $('chapter-crumb').textContent = p.gate ? '関門' : '計画';
   $('chapter-body').innerHTML = `<h1 class="ch-title">${fmtDay(d, true)}</h1>` + dayCard(p, p.rest ? '休み' : 'この日にやること');
   openChapterId = null;
   showView('chapter');
@@ -380,11 +504,26 @@ function renderRecord() {
     <div class="stat"><b>${answered.length ? Math.round(okNow / answered.length * 100) : 0}%</b><span>確認問題の正解率<br>（${answered.length}問解いた）</span></div>
   </div>`;
 
+  html += `<h2 class="section-title">関門</h2><ul class="list">` + gateDays().map((p) => {
+    const rs = p.gate.map((it) => gateResult(it, p.d));
+    const judged = p.gate.filter((it) => it.target != null);
+    let chip = '<span class="score-chip">これから</span>';
+    if (p.d <= t) {
+      if (rs.some((r) => r.pass === null)) chip = '<span class="score-chip bad">未入力</span>';
+      else if (judged.every((it) => gateResult(it, p.d).pass)) chip = '<span class="score-chip good">通過</span>';
+      else chip = '<span class="score-chip bad">未達</span>';
+    }
+    return `<li class="list-row" data-plan-detail="${p.d}">
+      <span class="row-main"><span class="row-title">${esc(p.theme.replace('関門：', ''))}</span>
+        <span class="row-sub">${fmtDay(p.d, true)}${p.d <= t ? '・' + rs.map((r) => esc(r.text)).join('／') : ''}</span></span>
+      ${chip}</li>`;
+  }).join('') + `</ul>`;
+
   html += `<h2 class="section-title">過去問・模試の点数</h2>`;
   html += scores.length ? `<ul class="list">` + scores.map((p) => `<li class="list-row static">
       <span class="row-main"><span class="row-title">${esc(p.theme)}</span><span class="row-sub">${fmtDay(p.d)}</span></span>
       <span class="score-chip ${Number(state.scores[p.d]) >= 37 ? 'good' : ''}">${esc(state.scores[p.d])}点</span></li>`).join('') + `</ul>`
-    : `<div class="card soft"><p class="muted">7月から、過去問や模試を解いた日に「今日」の画面で点数を入れると、ここに並びます。</p></div>`;
+    : `<div class="card soft"><p class="muted">5月から、過去問の通し演習や模試を解いた日に「今日」の画面で点数を入れると、ここに並びます。</p></div>`;
 
   html += `<h2 class="section-title">バックアップ</h2>
     <div class="card soft">
@@ -429,6 +568,15 @@ document.addEventListener('click', (e) => {
   if (ds.goPlan) { planOnlyOpen = true; return switchTab('plan'); }
   switch (el.id) {
     case 'btn-next-q': return nextQuestion();
+    case 'btn-guess': {
+      markGuess(quiz.ids[quiz.i]);
+      quiz.results[quiz.i] = false;
+      const box = el.closest('.result');
+      box.classList.replace('ok', 'ng');
+      box.querySelector('.result-head').textContent = '勘で当たった → 間違えた問題に入れました';
+      el.remove();
+      return;
+    }
     case 'btn-retry-wrong': return startQuiz(shuffle(quiz.retry.slice()), '間違えた問題');
     case 'btn-finish-quiz':
     case 'btn-quit-quiz': return switchTab(backTo.quiz);
@@ -442,13 +590,25 @@ document.addEventListener('click', (e) => {
 });
 
 document.addEventListener('change', (e) => {
-  const d = e.target.dataset.scoreDay;
-  if (!d) return;
+  const { scoreDay, gateId, gateMax } = e.target.dataset;
+  if (!scoreDay && !gateId) return;
   const v = e.target.value.trim();
-  if (v === '') delete state.scores[d];
-  else state.scores[d] = String(Math.max(0, Math.min(50, Number(v) || 0)));
+  const val = String(Math.max(0, Math.min(Number(gateMax || 50), Number(v) || 0)));
+  if (scoreDay) {
+    if (v === '') delete state.scores[scoreDay]; else state.scores[scoreDay] = val;
+    showToast('点数を保存しました');
+  } else {
+    if (v === '') delete state.gates[gateId]; else state.gates[gateId] = val;
+    showToast('関門の結果を保存しました');
+  }
   saveState();
-  showToast('点数を保存しました');
+  // 合格ラインの判定を表示し直す
+  if ($('view-chapter').classList.contains('active') && !openChapterId) {
+    const d = $('chapter-body').querySelector('[data-toggle-day]');
+    if (d) showPlanDetail(d.dataset.toggleDay);
+  } else if (currentTab === 'today') {
+    renderToday();
+  }
 });
 
 $('backup-file').addEventListener('change', async (e) => {

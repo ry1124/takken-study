@@ -1,17 +1,15 @@
 # -*- coding: utf-8 -*-
-"""テキスト(Markdown)と毎日の計画表(Excel)から、アプリ用の js/data.js を作る。
+"""テキスト(Markdown)と毎日の計画(make_plan.py が作る plan.json)から、アプリ用の js/data.js を作る。
 テキストを追加・修正したら data_src に .md を置いてこのスクリプトを実行し、version.js を上げて公開する。"""
-import datetime as dt
 import html
 import json
 import re
 from pathlib import Path
 
-import openpyxl
 
 HERE = Path(__file__).parent
 APP = HERE.parent
-PLAN_XLSX = APP.parent / "宅建" / "宅建_毎日の学習計画.xlsx"
+PLAN_JSON = HERE / "plan.json"   # make_plan.py が作る
 
 # 科目の一覧。md がまだ無い科目は「準備中」として表示する
 SUBJECTS = [
@@ -131,17 +129,10 @@ def chapter_links(theme, subjects):
 
 
 def build_plan(subjects):
-    ws = openpyxl.load_workbook(PLAN_XLSX)["毎日の計画"]
-    days = []
-    for r in ws.iter_rows(min_row=2, values_only=True):
-        d, _w, _left, phase, subj, theme, todo, _done, memo = r[:9]
-        if not isinstance(d, (dt.date, dt.datetime)):
-            continue
-        memo = memo if memo and memo != "点数：" else ""
-        days.append({"d": d.strftime("%Y-%m-%d"), "phase": phase or "", "subj": subj or "", "theme": theme or "",
-                     "todo": (todo or "").replace("問題集", "確認問題"),  # 市販の問題集の代わりにアプリの確認問題を使う
- "memo": memo or "", "score": (r[8] == "点数："),
-                     "ch": chapter_links((theme or "") + (todo or ""), subjects), "rest": subj == "休み"})
+    """make_plan.py が作った plan.json に、その日に読む章を結びつける"""
+    days = json.loads(PLAN_JSON.read_text(encoding="utf-8"))
+    for p in days:
+        p["ch"] = chapter_links(p["theme"] + p["todo"], subjects)
     return days
 
 
