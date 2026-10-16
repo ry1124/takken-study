@@ -95,6 +95,29 @@ def parse_quiz(block, chap_id):
             for n, q in enumerate(qs, 1)]
 
 
+def load_questions():
+    """data_src/questions/*.txt の問題(本試験レベル・解説つき)を、章idごとに読み込む"""
+    bank = {}
+    for path in sorted((HERE / "questions").glob("*.txt")):
+        cur = None
+        for block in re.split(r"\n\s*\n", path.read_text(encoding="utf-8")):
+            m = re.search(r"^## (\S+)", block, re.M)
+            if m:
+                cur = m.group(1)
+                bank.setdefault(cur, [])
+            if not re.search(r"^Q: ", block, re.M):
+                continue
+            q = re.search(r"^Q: (.+)$", block, re.M).group(1).strip()
+            a = re.search(r"^A: ([○×])", block, re.M).group(1)
+            e = re.search(r"^E: (.+)", block, re.M | re.S).group(1).strip()
+            n = len(bank[cur]) + 1
+            bank[cur].append({"id": f"{cur}-h{n:02d}", "q": q, "a": a == "○", "exp": e})
+    return bank
+
+
+QUESTION_BANK = load_questions()
+
+
 def build_subject(sub):
     path = HERE / sub["file"]
     if not path.exists():
@@ -113,7 +136,9 @@ def build_subject(sub):
         parts = re.split(r"^### 確認問題.*$", body, flags=re.M)
         lead = parts[0].strip().split("\n", 1)[0]
         chapters.append({"id": cid, "no": no, "title": m.group(2), "lead": lead,
-                         "html": md_to_html(parts[0]), "quiz": parse_quiz(parts[1], cid) if len(parts) > 1 else []})
+                         "html": md_to_html(parts[0]),
+                         # 問題集があればそれを使い、なければテキスト末尾の確認問題を使う
+                         "quiz": QUESTION_BANK.get(cid) or (parse_quiz(parts[1], cid) if len(parts) > 1 else [])})
     return {**{k: sub[k] for k in ("id", "name", "when")}, "ready": True, "intro": intro, "chapters": chapters}
 
 

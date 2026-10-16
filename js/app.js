@@ -81,7 +81,7 @@ function weekWrongIds() {
 }
 
 // ===== 宅建業法の一問一答(毎日) =====
-const IPPON_SIZE = 10;
+const IPPON_SIZE = 15;
 // 章を最初に読む日。その日を過ぎた章だけを一問一答に出す
 const CH_FIRST_DAY = {};
 PLAN.forEach((p) => p.ch.forEach((id) => { if (!CH_FIRST_DAY[id]) CH_FIRST_DAY[id] = p.d; }));
@@ -310,7 +310,7 @@ function renderQuizMenu() {
     <button class="quick-btn" data-quiz-mode="wrong" ${wrong.length ? '' : 'disabled'}>
       <b>間違えた問題</b><span>${wrong.length}問（3回続けて正解で外れる）</span></button>
     <button class="quick-btn" data-quiz-mode="random" ${allIds.length ? '' : 'disabled'}>
-      <b>ランダムに10問</b><span>全${allIds.length}問から</span></button>
+      <b>ランダムに20問</b><span>全${allIds.length}問から</span></button>
     <button class="quick-btn" data-quiz-mode="new" ${answered < allIds.length ? '' : 'disabled'}>
       <b>まだ解いていない問題</b><span>${allIds.length - answered}問</span></button>
   </div>`;
@@ -351,7 +351,7 @@ function startQuizMode(mode) {
   if (mode === 'ippon') startQuiz(ipponSet(), '一問一答', 'ippon');
   else if (mode === 'week') startQuiz(shuffle(weekWrongIds()), '今週間違えた問題');
   else if (mode === 'wrong') startQuiz(shuffle(wrongIds()), '間違えた問題');
-  else if (mode === 'random') startQuiz(shuffle(all.slice()).slice(0, 10), 'ランダム10問');
+  else if (mode === 'random') startQuiz(shuffle(all.slice()).slice(0, 20), 'ランダム20問');
   else if (mode === 'new') startQuiz(all.filter((id) => !state.quiz[id]).slice(0, 10), 'まだ解いていない問題');
   else if (mode === 'today') {
     const today = PLAN.find((p) => p.d === todayStr());
@@ -394,7 +394,7 @@ function answerQuestion(choice) {
   const last = quiz.i === quiz.ids.length - 1;
   $('q-result').innerHTML = `<div class="result ${ok ? 'ok' : 'ng'}">
       <div class="result-head">${ok ? '正解' : '不正解'}　答えは ${q.a ? '○' : '×'}</div>
-      ${q.exp ? `<p>${esc(q.exp)}</p>` : ''}
+      ${q.exp ? `<div class="exp"><div class="exp-label">解説</div><p>${esc(q.exp)}</p></div>` : ''}
       ${ok ? `<button class="guess-btn" id="btn-guess">理由を説明できない（勘で当たった）→ ×にする</button>` : ''}
     </div>
     <div class="q-actions">
