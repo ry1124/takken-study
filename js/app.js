@@ -840,8 +840,10 @@ async function fetchLatestVersion() {
 
 let pendingReload = false;
 let updateInFlight = false;
-// 新しいバージョンがあれば、そのファイル一式を新しいキャッシュに入れてから画面を更新する。
-// service-worker.js 自体は中身が変わらないリリースもあるので、ブラウザの更新チェックだけに頼らない
+const RELOADED_KEY = 'takken-reloaded-for';
+// 新しいバージョンがあれば、そのファイル一式を(配信キャッシュを素通りして)取り、本当に新しい版かを確かめてから
+// 新しいキャッシュに入れ、画面を読み込み直す。service-worker.js 自体は中身が変わらないリリースもあるので、
+// ブラウザの更新チェックだけに頼らない
 async function checkForUpdate(manual) {
   if (updateInFlight) return;
   if (!('caches' in window)) { if (manual) reportUpdate('このブラウザでは確認できません', true); return; }
@@ -850,22 +852,28 @@ async function checkForUpdate(manual) {
   try {
     const latest = await fetchLatestVersion();
     if (latest === APP_VERSION) {
+      try { sessionStorage.removeItem(RELOADED_KEY); } catch (e) { /* なくても動く */ }
       reportUpdate(`最新のバージョン（${APP_VERSION}）です`, manual);
       return;
     }
-    // 同じバージョンへの自動更新は1回だけ(HTTPキャッシュが古いまま再読込を繰り返さないため)
-    let tried = null;
-    try { tried = localStorage.getItem('takken-update-tried'); } catch (e) { /* なくても動く */ }
-    if (!manual && tried === latest) return;
-    try { localStorage.setItem('takken-update-tried', latest); } catch (e) { /* なくても動く */ }
+    // 読み込み直したのにまだ古いときは、自動では繰り返さない(読み込み直しが止まらなくなるのを防ぐ)
+    let reloaded = null;
+    try { reloaded = sessionStorage.getItem(RELOADED_KEY); } catch (e) { /* なくても動く */ }
+    if (!manual && reloaded === latest) {
+      reportUpdate(`新しいバージョン（${latest}）に切り替わりませんでした。「最新バージョンか確認する」を押してください`, false);
+      return;
+    }
 
+    const entries = await fetchFreshAssets(latest);   // 古いファイルしか返らなければここで止まる(次の確認でやり直す)
     const name = 'takken-cache-' + latest;
+    await caches.delete(name);                         // 前に途中まで入れたものがあれば捨てる
     const cache = await caches.open(name);
-    await cache.addAll(CORE_ASSETS.map((u) => new Request(u, { cache: 'reload' })));
+    await Promise.all(entries.map(([href, res]) => cache.put(href, res)));
     const keys = await caches.keys();
     await Promise.all(keys.filter((k) => k !== name).map((k) => caches.delete(k)));
     const reg = await navigator.serviceWorker?.getRegistration();
     if (reg) reg.update().catch(() => {});
+    try { sessionStorage.setItem(RELOADED_KEY, latest); } catch (e) { /* なくても動く */ }
 
     if ($('view-quiz').classList.contains('active')) {
       pendingReload = true;
@@ -875,7 +883,10 @@ async function checkForUpdate(manual) {
       setTimeout(() => location.reload(), 900);
     }
   } catch (e) {
-    reportUpdate('確認できませんでした。通信状態を確かめてください', manual);
+    const msg = String(e.message || '').includes('まだ')
+      ? '新しいバージョンを公開した直後で、まだ準備中です。数分後にもう一度確認してください'
+      : '確認できませんでした。通信状態を確かめてください';
+    reportUpdate(msg, manual);
   } finally {
     updateInFlight = false;
   }
@@ -885,6 +896,7 @@ async function checkForUpdate(manual) {
 $('app-version').textContent = 'v' + APP_VERSION;
 switchTab('today'); // 開いたら毎回「今日」から
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js').catch(() => {});
+  // service-worker.js が読み込むファイル(version.js など)もブラウザのキャッシュを通さずに更新を確かめる
+  navigator.serviceWorker.register('service-worker.js', { updateViaCache: 'none' }).catch(() => {});
 }
 checkForUpdate(false); // 開いたときに、裏で新しいバージョンがないか確認する
