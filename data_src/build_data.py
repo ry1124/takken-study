@@ -117,6 +117,44 @@ def load_questions():
 
 QUESTION_BANK = load_questions()
 
+EXAM_TYPES = {"正": "正しいものはどれか", "誤": "誤っているものはどれか", "数": "正しいものはいくつあるか"}
+
+
+def load_exam():
+    """data_src/exam/*.txt の本試験形式(4択)の問題を、章idごとに読み込む。答えは各選択肢の○×から決める"""
+    bank = {}
+    for path in sorted((HERE / "exam").glob("*.txt")):
+        cur = None
+        for block in re.split(r"\n\s*\n", path.read_text(encoding="utf-8")):
+            m = re.search(r"^## (\S+)", block, re.M)
+            if m:
+                cur = m.group(1)
+                bank.setdefault(cur, [])
+            if not re.search(r"^T: ", block, re.M):
+                continue
+            typ = re.search(r"^T: (\S)", block, re.M).group(1)
+            stem = re.search(r"^S: (.+)$", block, re.M).group(1).strip()
+            opts = [{"label": mm.group(1), "ok": mm.group(2) == "○", "t": mm.group(3).strip(), "e": mm.group(4).strip()}
+                    for mm in re.finditer(r"^([1-4ア-エ])([○×]) (.+)\nE: (.+)$", block, re.M)]
+            qid = f"{cur}-e{len(bank[cur]) + 1:02d}"
+            assert len(opts) == 4, f"{qid}: 選択肢が{len(opts)}個"
+            n_ok = sum(o["ok"] for o in opts)
+            if typ == "正":
+                assert n_ok == 1, f"{qid}: 正しいものが{n_ok}個"
+                ans = next(i for i, o in enumerate(opts) if o["ok"]) + 1
+            elif typ == "誤":
+                assert n_ok == 3, f"{qid}: 誤っているものが{4 - n_ok}個"
+                ans = next(i for i, o in enumerate(opts) if not o["ok"]) + 1
+            else:
+                assert n_ok >= 1, f"{qid}: 正しいものが0個"
+                ans = n_ok   # 「一つ」〜「四つ」のどれか
+            bank[cur].append({"id": qid, "kind": "exam", "type": typ, "lead": EXAM_TYPES[typ],
+                              "stem": stem, "opts": opts, "ans": ans})
+    return bank
+
+
+EXAM_BANK = load_exam()
+
 
 def build_subject(sub):
     path = HERE / sub["file"]
@@ -138,7 +176,8 @@ def build_subject(sub):
         chapters.append({"id": cid, "no": no, "title": m.group(2), "lead": lead,
                          "html": md_to_html(parts[0]),
                          # 問題集があればそれを使い、なければテキスト末尾の確認問題を使う
-                         "quiz": QUESTION_BANK.get(cid) or (parse_quiz(parts[1], cid) if len(parts) > 1 else [])})
+                         "quiz": QUESTION_BANK.get(cid) or (parse_quiz(parts[1], cid) if len(parts) > 1 else []),
+                         "exam": EXAM_BANK.get(cid, [])})
     return {**{k: sub[k] for k in ("id", "name", "when")}, "ready": True, "intro": intro, "chapters": chapters}
 
 
@@ -168,5 +207,6 @@ data = {"exam": "2027-10-17", "subjects": subjects, "plan": plan}
     "// build_data.py が作るデータ(手で編集しない)\nconst TAKKEN_DATA = " + json.dumps(data, ensure_ascii=False) + ";\n",
     encoding="utf-8")
 nq = sum(len(c["quiz"]) for s in subjects for c in s["chapters"])
+ne = sum(len(c["exam"]) for s in subjects for c in s["chapters"])
 linked = sum(1 for p in plan if p["ch"])
-print(f"章 {sum(len(s['chapters']) for s in subjects)} / 問題 {nq} / 計画 {len(plan)}日（章と結びついた日 {linked}）")
+print(f"章 {sum(len(s['chapters']) for s in subjects)} / 一問一答 {nq} / 本試験形式 {ne} / 計画 {len(plan)}日（章と結びついた日 {linked}）")

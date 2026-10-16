@@ -3,8 +3,8 @@ const STORE_KEY = 'takken-study-v1';
 
 function emptyState() {
   // quiz: 問題id -> { n:解いた回数, ok:正解数, last:直近の正誤, streak:連続正解数, miss:間違えた回数, at }
-  // gates: 関門の項目id -> 入力した正答率(%)や点数 / ippon: 日付 -> その日に解いた一問一答の数
-  return { done: {}, read: {}, quiz: {}, scores: {}, gates: {}, ippon: {} };
+  // gates: 関門の項目id -> 入力した正答率(%)や点数 / ippon・examDay: 日付 -> その日に解いた一問一答・本試験形式の数
+  return { done: {}, read: {}, quiz: {}, scores: {}, gates: {}, ippon: {}, examDay: {} };
 }
 
 let state = loadState();

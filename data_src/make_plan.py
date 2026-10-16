@@ -23,6 +23,7 @@ HOLIDAYS = {D(2026, 12, 31), D(2027, 1, 1)}   # 年末年始は休み
 
 IPPON = "①宅建業法の一問一答（30分）"
 FIX = "③×の問題を解き直し、なぜ間違えたかを1行メモ（30分）"
+EXAMQ = "③本試験形式（4択）をアプリで5問解き、4つの選択肢すべての解説を読む（30分）"
 
 GYOHO = [("宅建業の定義（宅地・建物・取引・業）", 1), ("免許の種類・免許換え・届出", 2), ("免許の欠格事由", 2),
          ("事務所・案内所・標識・帳簿", 1), ("宅建士の登録・宅建士証", 2), ("登録の移転・変更の登録", 1),
@@ -106,11 +107,12 @@ def first_round(start, end, phase, subj, topics, gate_theme, gate_todo, gate_ite
                 main, th = f"②分野別過去問の「{t}」の残りを解き、この単元の×をすべて解き直す（2時間）", f"{t}（{c}/{c}日目）"
             else:
                 main, th = f"②分野別過去問の「{t}」の続きを解き、間違えた所をテキストで読み直す（2時間）", f"{t}（{p + 1}/{c}日目）"
-            if extra:   # 4月: 税・その他と並行して宅建業法の2周目
-                main = main.replace("（2時間）", "（1.5時間）")
-                todo = f"{IPPON}\n{main}\n③宅建業法の2周目：分野別過去問の「{extra[k % len(extra)]}」を解き直す（1時間）"
+            if extra:   # 2月: 税・その他と並行して宅建業法の2周目
+                main = main.replace("（2時間）", "（1時間）")
+                todo = f"{IPPON}\n{main}\n{EXAMQ}\n④宅建業法の2周目：分野別過去問の「{extra[k % len(extra)]}」を解き直す（1時間）"
             else:
-                todo = f"{IPPON}\n{main}\n{FIX}"
+                main = main.replace("（2時間）", "（1.5時間）")
+                todo = f"{IPPON}\n{main}\n{EXAMQ}\n{FIX.replace('③', '④')}"
             put(body[k], phase, subj, th, todo)
             k += 1
     put(review, phase, subj, f"{subj} 関門の前の総復習",
@@ -167,7 +169,7 @@ def rounds(start, end, phase, gate_theme, gate_year, gate_item):
         subj, grp = groups[gi % len(groups)]
         rnd = ROUNDS[min(gi // len(groups), len(ROUNDS) - 1)]
         put(d, phase, subj, f"{rnd}：" + "／".join(grp),
-            f"{IPPON}\n②分野別過去問の「{'」「'.join(grp)}」を解く（2時間）\n③×の問題をテキストで確認し、弱点ノートに1行メモ（30分）")
+            f"{IPPON}\n②分野別過去問の「{'」「'.join(grp)}」を解く（1.5時間）\n{EXAMQ}\n④×の問題をテキストで確認し、弱点ノートに1行メモ（30分）")
         progress["gi"] += 1
     gate_day(days[-1], phase, "過去問", gate_theme,
              f"{IPPON}\n②{gate_year}の過去問50問を本番どおり2時間で解く\n③採点し、点数をアプリの「今日」に入力（30分）", [gate_item])

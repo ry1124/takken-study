@@ -271,3 +271,34 @@ html, body {
 .exp { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(0, 0, 0, 0.08); }
 .exp-label { font-size: 13px; font-weight: 800; color: var(--text); }
 .exp p { margin: 4px 0 0; font-size: 15px; line-height: 1.75; color: var(--text); }
+
+/* ===== 本試験形式(4択) ===== */
+.link-sub { display: flex; flex-direction: column; gap: 6px; }
+.chip-pair { display: flex; gap: 6px; flex-shrink: 0; }
+button.score-chip { border: none; font-family: inherit; cursor: pointer; }
+.quick-btn.strong { background: var(--accent-soft); }
+.quick-btn.strong b { color: var(--accent); }
+.ex-type { margin-left: 8px; font-weight: 700; color: var(--accent); }
+.timer { align-self: flex-start; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-dim); background: var(--surface); border-radius: 8px; padding: 4px 10px; }
+.timer.over, .result-time.over, .finish-time.over { color: var(--bad); }
+.q-stem { font-size: 16px; line-height: 1.7; margin: 0; font-weight: 700; }
+.ex-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ex-opt { width: 100%; display: flex; gap: 10px; align-items: flex-start; text-align: left; font-family: inherit; font-size: 15px; line-height: 1.65; color: var(--text); background: var(--bg); border: 2px solid var(--border); border-radius: 14px; padding: 12px; cursor: pointer; }
+.ex-stmt { display: flex; gap: 10px; align-items: flex-start; font-size: 15px; line-height: 1.65; background: var(--surface); border-radius: 12px; padding: 12px; }
+.ex-label { flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 14px; background: var(--surface2); color: var(--text); }
+.count-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.ex-count { font-family: inherit; font-size: 15px; font-weight: 700; padding: 14px 4px; border-radius: 12px; border: 2px solid var(--border); background: var(--bg); color: var(--text); cursor: pointer; }
+.ex-opt.is-answer, .ex-count.is-answer { border-color: var(--good); background: var(--good-soft); }
+.ex-opt.is-wrong, .ex-count.is-wrong { border-color: var(--bad); background: var(--bad-soft); }
+.ex-opt.is-other, .ex-count.is-other { opacity: 0.45; }
+.ex-opt:disabled, .ex-count:disabled { cursor: default; color: var(--text); }
+.result-time { font-size: 13px; font-weight: 700; color: var(--text-dim); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.ex-exps { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.ex-exp-head { display: flex; align-items: center; gap: 8px; }
+.ex-exp p { margin: 4px 0 0 34px; font-size: 14px; line-height: 1.7; }
+.finish-time { font-size: 14px; font-weight: 700; margin: 4px 0; font-variant-numeric: tabular-nums; }
+
+/* ===== 設定 ===== */
+#view-settings { z-index: 20; background: var(--bg); padding-bottom: calc(32px + var(--safe-bottom)); }
+.settings-btn { font-size: 22px; padding: 4px 6px; line-height: 1; }
+.ver { font-size: 20px; color: var(--accent); font-variant-numeric: tabular-nums; }
